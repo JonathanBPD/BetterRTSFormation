@@ -1,0 +1,225 @@
+plugins {
+    id "java"
+}
+
+group = "betterrtsformation"
+version = "1.0.0"
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_1_8
+    targetCompatibility = JavaVersion.VERSION_1_8
+}
+
+repositories {
+    mavenCentral()
+    maven { url "https://jitpack.io" }
+}
+
+def mindustryVersion = (findProperty("mindustryVersion") ?: "v154.3").toString()
+
+configurations {
+    androidPlatform
+}
+
+dependencies {
+    compileOnly "com.github.Anuken.MindustryJitpack:core:$mindustryVersion"
+    androidPlatform "com.google.android:android:4.1.1.4"
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = "UTF-8"
+    if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_1_9)) {
+        options.release.set(8)
+    }
+}
+
+def isWindows = System.getProperty("os.name").toLowerCase(Locale.ROOT).contains("windows")
+
+def findD8 = {
+    def explicit = System.getenv("D8_PATH")
+    if (explicit) {
+        def file = new File(explicit)
+        if (file.exists()) return file
+    }
+
+    def sdkRoot = System.getenv("ANDROID_SDK_ROOT") ?: System.getenv("ANDROID_HOME")
+    if (sdkRoot) {
+        def buildToolsDir = new File(sdkRoot, "build-tools")
+        if (buildToolsDir.isDirectory()) {
+            def toolName = isWindows ? "d8.bat" : "d8"
+            def candidates = (buildToolsDir.listFiles() ?: [])
+                .findAll { it.isDirectory() }
+                .sort { a, b -> b.name <=> a.name }
+
+            for (def directory : candidates) {
+                def file = new File(directory, toolName)
+                if (file.exists()) return file
+            }
+        }
+    }
+
+    if (isWindows) {
+        def workspaceRoot = rootDir.parentFile
+        def matches = (workspaceRoot.listFiles() ?: [])
+            .findAll { it.isDirectory() && it.name.startsWith("commandlinetools-win-") }
+            .sort { a, b -> b.name <=> a.name }
+
+        for (def directory : matches) {
+            def file = new File(directory, "cmdline-tools/bin/d8.bat")
+            if (file.exists()) return file
+        }
+    }
+
+    return null
+}
+
+def findAndroidJar = {
+    def sdkRoot = System.getenv("ANDROID_SDK_ROOT") ?: System.getenv("ANDROID_HOME")
+    if (!sdkRoot) return null
+
+    def platformRoot = new File(sdkRoot, "platforms").listFiles()
+        ?.findAll { it.isDirectory() }
+        ?.sort { a, b -> b.name <=> a.name }
+        ?.find { directory -> new File(directory, "android.jar").exists() }
+
+    return platformRoot == null ? null : new File(platformRoot, "android.jar")
+}
+
+def androidDexOutDir = layout.buildDirectory.dir("d8").get().asFile
+def runnableStubClassesDir = layout.buildDirectory.dir("d8-runnable-stub-classes").get().asFile
+def runnableStubJarFile = layout.buildDirectory.file("d8-runnable-stub/runnable-stub.jar").get().asFile
+
+tasks.register("d8InputJar", Jar) {
+    group = "build"
+    description = "Builds the temporary class jar used by D8."
+    dependsOn tasks.named("classes")
+    archiveFileName = "${project.name}-d8-input.jar"
+    destinationDirectory = layout.buildDirectory.dir("d8-input")
+    from(sourceSets.main.output.classesDirs)
+}
+
+tasks.register("compileRunnableStub", JavaCompile) {
+    group = "build"
+    description = "Compiles a tiny java.lang.Runnable stub for D8 library resolution."
+    source = files("tmp-stubs/java/lang/Runnable.java")
+    classpath = files()
+    destinationDirectory = layout.buildDirectory.dir("d8-runnable-stub-classes")
+    sourceCompatibility = "1.8"
+    targetCompatibility = "1.8"
+    options.encoding = "UTF-8"
+    if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_1_9)) {
+        options.release.set(8)
+    }
+}
+
+tasks.register("jarRunnableStub", Jar) {
+    group = "build"
+    description = "Packages the Runnable stub for D8 --lib."
+    dependsOn tasks.named("compileRunnableStub")
+    archiveFileName = "runnable-stub.jar"
+    destinationDirectory = layout.buildDirectory.dir("d8-runnable-stub")
+    from(runnableStubClassesDir)
+}
+
+tasks.register("dexAndroid", Exec) {
+    group = "build"
+    description = "Compiles Java bytecode into classes.dex for Android mod loading."
+    dependsOn tasks.named("d8InputJar")
+    dependsOn tasks.named("jarRunnableStub")
+
+    doFirst {
+        def d8 = findD8()
+        if (d8 == null) {
+            throw new GradleException("D8 not found. Set ANDROID_SDK_ROOT/ANDROID_HOME or D8_PATH.")
+        }
+
+        def androidJar = findAndroidJar()
+        if (androidJar == null) {
+            androidJar = configurations.androidPlatform.resolve().find { it.name.endsWith(".jar") }
+        }
+
+        if (androidJar == null) {
+            throw new GradleException("No Android platform library found. Install an Android SDK platform or allow Maven resolution of com.google.android:android:4.1.1.4")
+        }
+
+        delete(androidDexOutDir)
+        androidDexOutDir.mkdirs()
+
+        def programJar = tasks.named("d8InputJar").get().archiveFile.get().asFile
+
+        commandLine d8.absolutePath
+        args "--min-api", "14", "--release", "--output", androidDexOutDir.absolutePath
+        args "--lib", androidJar.absolutePath
+        args "--lib", runnableStubJarFile.absolutePath
+
+        configurations.compileClasspath.files.each { file ->
+            args "--classpath", file.absolutePath
+        }
+
+        args programJar.absolutePath
+    }
+}
+
+tasks.register("jarDesktop", Jar) {
+    group = "build"
+    description = "Packages a desktop development jar."
+    dependsOn tasks.named("classes")
+    archiveFileName = "${project.name}-desktop.jar"
+    from(sourceSets.main.output)
+    from(projectDir) {
+        include "mod.json"
+    }
+}
+
+tasks.register("jarAndroid", Jar) {
+    group = "build"
+    description = "Packages an Android development jar with classes.dex."
+    dependsOn tasks.named("dexAndroid")
+    archiveFileName = "${project.name}-android.jar"
+    from(sourceSets.main.output.resourcesDir)
+    from(androidDexOutDir) {
+        include "classes.dex"
+    }
+    from(projectDir) {
+        include "mod.json"
+    }
+}
+
+tasks.register("jarMerged", Jar) {
+    group = "build"
+    description = "Packages a single desktop and Android compatible jar."
+    dependsOn tasks.named("classes")
+    dependsOn tasks.named("dexAndroid")
+    archiveFileName = "${project.name}.jar"
+    destinationDirectory = layout.buildDirectory.dir("libs")
+    from(sourceSets.main.output)
+    from(androidDexOutDir) {
+        include "classes.dex"
+    }
+    from(projectDir) {
+        include "mod.json"
+    }
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+def buildOutputDir = new File(rootDir.parentFile, "构建/${project.name}")
+
+tasks.register("copyDevArtifact", Copy) {
+    group = "build"
+    description = "Copies the local development jar to the workspace staging directory."
+    doNotTrackState("Copies the local development artifact to the workspace staging directory.")
+    dependsOn tasks.named("jarMerged")
+    from(tasks.named("jarMerged").flatMap { it.archiveFile })
+    into(buildOutputDir)
+    rename { _ -> "${project.name}-dev.jar" }
+}
+
+tasks.named("jarMerged").configure {
+    finalizedBy tasks.named("copyDevArtifact")
+}
+
+tasks.register("deploy") {
+    group = "build"
+    description = "Builds the local desktop and Android compatible development jar."
+    dependsOn tasks.named("jarMerged")
+}

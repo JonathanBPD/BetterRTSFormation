@@ -190,7 +190,7 @@ tasks.register("jarMerged", Jar) {
     description = "Packages a single desktop and Android compatible jar."
     dependsOn tasks.named("classes")
     dependsOn tasks.named("dexAndroid")
-    archiveFileName = "${project.name}.jar"
+    archiveFileName = "${project.name}-${project.version}.jar"
     destinationDirectory = layout.buildDirectory.dir("libs")
     from(sourceSets.main.output)
     from(androidDexOutDir) {
@@ -214,8 +214,18 @@ tasks.register("copyDevArtifact", Copy) {
     rename { _ -> "${project.name}-dev.jar" }
 }
 
+tasks.register("copyMergedJarToDist", Copy) {
+    group = "build"
+    description = "Copies the merged jar to the project dist directory for release uploads."
+    dependsOn tasks.named("jarMerged")
+    from(tasks.named("jarMerged").flatMap { it.archiveFile })
+    into(new File(projectDir, "dist"))
+    doNotTrackState("The dist folder is an explicit release delivery target.")
+}
+
 tasks.named("jarMerged").configure {
     finalizedBy tasks.named("copyDevArtifact")
+    finalizedBy tasks.named("copyMergedJarToDist")
 }
 
 tasks.register("deploy") {

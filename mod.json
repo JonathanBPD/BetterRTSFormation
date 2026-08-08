@@ -2,7 +2,7 @@
   "name": "BetterRTSFormation",
   "displayName": "Better RTS Formation",
   "author": "DeterMination-Wind",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "minGameVersion": 154,
   "description": "Make RTS control groups easier to create, select, and recognize.",
   "main": "betterrtsformation.BetterRTSFormationMod",

@@ -41,3 +41,7 @@ Enable the mod and review the formation controls in the game settings. Use the f
 ~~~
 
 Put the generated mod JAR in Mindustry's mods directory and launch the game.
+
+## 文档
+
+更多说明见 [docs/README.md](docs/README.md)：架构总览、开发指南、版本与发布、测试指南与术语表。

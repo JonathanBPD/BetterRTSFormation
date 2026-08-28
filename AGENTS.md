@@ -4,7 +4,7 @@
 
 ## 项目定位与边界
 
-- Better RTS Formation（Neon 聚合模组中 id=brf）是 Mindustry 纯客户端 Java 模组：改善 RTS 编队（control group）的创建、选择与识别（快捷键编队、框选创建、编队角标）。目标游戏版本 `minGameVersion: 154`。
+- Better RTS Formation（Neon 聚合模组中 id=brf）是 Mindustry 纯客户端 Java 模组：改善 RTS 编队（control group）的创建、选择与识别（快捷键编队、框选创建、编队角标、运输后归属保持与近邻聚团显示）。目标游戏版本 `minGameVersion: 154`。
 - 本仓库是该子模组的**真源**；Neon（`../Neon`）通过 `tools/update_submods.py` 从这里拷贝源码。`submods.json` 中 `injectBekHooks=false`，聚合契约由本仓库手工维护，不由注入脚本生成。
 - 只做最小侵入修改：不顺手重构、不引入第三方依赖、不改与任务无关的文件。纯客户端，不新增游戏内容（`hidden: true`）。
 
@@ -34,7 +34,7 @@
 
 - Java 8 字节码；只依赖 `compileOnly` 的 Mindustry core，不新增依赖。
 - 逻辑进 `BetterRTSFormationFeature`；入口类只留生命周期与聚合契约。
-- 编队唯一数据源是原生 `input.controlGroups`；写入必须经 `applyGroupEdit()` / `collectValidUnitIds()` 的过滤（`isValidGroupUnit`：可指挥、存活、己方队伍），不得绕过。
+- 编队唯一数据源是原生 `input.controlGroups`；写入必须经 `applyGroupEdit()` / `collectValidUnitIds()` 的过滤（`isValidGroupUnit`：可指挥、存活、己方队伍），不得绕过。运输跟踪只能暂存本局对象引用，不能替代原生编队存储。
 - `InputProcessor` 保持全部方法实现（安卓 `AbstractMethodError` 防回归）。
 - 用户可见文案走 bundle key，三份语言文件同步更新。
 
@@ -52,8 +52,9 @@
 1. `.\gradlew.bat deploy` 成功；`dist/` 与 `../构建/BetterRTSFormation/` 产物已刷新。
 2. 快捷键编队四操作（追加 / 覆盖创建 / 排他追加 / 选择）+ Delete 踢出按预期。
 3. 框选（普通 / 排他 / 红框删除）在 `brf-outside-command-mode` 开启时工作，关闭时不出现。
-4. 角标颜色/编号正确，失效单位不残留。
-5. 独立形态设置分类出现；聚合形态（Neon）不重复出现且 RbmStyle 渲染正常。
+4. 角标颜色/编号正确；同编队近邻单位合并显示，失效单位不残留。
+5. Mega/其他载荷单位释放后仍保留编队号；运输中选择或寻找空组不会误删成员。
+6. 独立形态设置分类出现；聚合形态（Neon）不重复出现且 RbmStyle 渲染正常。
 
 ## 提交与发布规范
 

@@ -10,7 +10,7 @@ Better RTS Formation 改善 Mindustry 的 RTS 编队工作流。它让编队更�
 
 ## 使用
 
-启用模组后，在游戏控制设置中查看编队相关按键。使用前置键配合数字即可创建或追加编队，单位头顶的标识会帮助你确认归属。
+启用模组后，在游戏控制设置中查看编队相关按键。使用前置键配合数字即可创建或追加编队；相近的同编队单位会合并显示一个适度放大的编号，被 Mega 等载具搬运并释放后仍保留原编队归属。
 
 ## 构建与安装
 
@@ -32,7 +32,7 @@ Current version: 2.0.0.
 
 ## Usage
 
-Enable the mod and review the formation controls in the game settings. Use the formation prefix key with a number to create or add to a group, then use the unit markers to confirm membership.
+Enable the mod and review the formation controls in the game settings. Use the formation prefix key with a number to create or add to a group; nearby units in the same group share one slightly larger marker, and units carried by Mega or another payload carrier keep their formation after release.
 
 ## Build and install
 

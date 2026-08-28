@@ -38,7 +38,8 @@
   --> handleFormationShortcut() / updateFormationBox()
   --> applyGroupEdit() / createGroup() / selectGroup() / deleteFormations()
   --> Mindustry 原生 input.controlGroups（IntSeq[]，唯一数据源）
-  --> Trigger.draw：drawBadges() 逐帧重建 groupMembership 缓存并画角标
+  --> Trigger.update：运输中的单位跟踪与实体 ID 迁移
+  --> Trigger.draw：drawBadges() 逐帧重建 groupMembership，并按编队聚团画角标
 ```
 
 要点：
@@ -46,6 +47,9 @@
 - 成员过滤统一走 `isValidGroupUnit()`：可指挥（`isCommandable`）、存活、且属于玩家队伍。因此编队只含单位；`selectGroup()` 还会清空 `commandBuildings`，保证选择编队后下发的命令只作用于单位。
 - 编辑语义四种：`groupEditAdd`（追加，保留原成员并去重）、`groupEditAddExclusive`（先从所有编队踢出再追加）、`groupEditRemoveAll`（把选中单位从所有编队踢出）、覆盖创建（`createGroup`，清空后重建）。
 - 旧存档里可能有重复 id，`removeUnitIds()` 用 while 循环清干净；`firstEmptyGroup()` 会顺手剔除失效单位后再找第一个空闲编队。
+- 运输中的己方可指挥单位由 `TransportedUnit` 暂存对象引用和编队 bit mask；`PickupEvent`、释放事件以及每帧 payload 扫描共同覆盖载具、PayloadBlock/PayloadConveyor 等路径。单位重新加入实体组且 ID 变化时，辅助状态会把旧 ID 迁移为新 ID；短暂不在 `Groups.unit` 不会立即被清掉，用户明确编辑编队后则同步更新 mask。
+- 运输跟踪是本局运行时状态，不改变原生存档格式；载荷序列化后重建成全新 Unit 对象时无法可靠推断原编队，仍按原生限制处理。
+- 角标按编队独立进行空间聚团：相机缩放换算约 48px 的世界距离，并将单位尺寸的一半计入邻近判定；同编队近邻单位只画一个编号并按成员数适度放大。不同编队不合并，同一单位/位置属于多个编队时仍按编号顺序横向排开。
 - 数字键识别双通道：硬编码主键盘/小键盘 `1-9`/`0`，外加对 `Binding.blockSelect01..10` 自定义绑定的匹配。
 - 框选是一个显式状态机（`formationBox*` 字段）：开始时记录世界坐标起点，松开鼠标或松开前置键即结束；矩形内单位经 `input.selectedCommandUnits(...)` 取得。
 
